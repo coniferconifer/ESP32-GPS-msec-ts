@@ -91,11 +91,11 @@ void loop() {
   
   char c;
   if ( GPS_PulseCount > 0 ) {
+    gpsPulseTimeMillis = millis();
     //If ISR has been serviced at least once
     portENTER_CRITICAL(&mux);
     GPS_PulseCount--;
-    portEXIT_CRITICAL(&mux);
-    gpsPulseTimeMillis = millis();
+    portEXIT_CRITICAL(&mux);    
     Serial.print("GPS 1PPS pulse on time (msec) "); Serial.println(gpsPulseTimeMillis);
   }
   if (ss.available() > 0) { //since ss.available() crashes when it is included in a Task,
@@ -186,10 +186,13 @@ String int2digit3(uint32_t msec) {
 #define ADC_CHECK_INTERVAL 100 //msec
 void codeForADC(void * parameter)
 {
+  portTickType xLastWakeTime;
+  xLastWakeTime = xTaskGetTickCount();
   Serial.println(F("Voltage check task started."));
   while (1) {
     checkVoltageLevel();
-    vTaskDelay( ADC_CHECK_INTERVAL / portTICK_RATE_MS );
+//    vTaskDelay( ADC_CHECK_INTERVAL / portTICK_RATE_MS );
+    vTaskDelayUntil(&xLastWakeTime, ADC_CHECK_INTERVAL / portTICK_RATE_MS );
   }
 }
 
