@@ -30,8 +30,8 @@ GPS 1PPS pulse on time (msec) 72539
 - GPIO_NUM_2 is used to light LED when NMEA provides UTC(in sec) to ESP32.
 - (to do)This is an experimental code to observe the same phenomenon by multiple ESP32 board with sensors.  
 
-- ![Time chart]https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/timechart.png
-- ![1PPS signal wire jumper]https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/NEO6MPPS.jpg
+![Time chart](https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/timechart.png)
+![1PPS signal wire jumper](https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/NEO6MPPS.jpg)
 ### Hardware
 - Hardware: ESP32-devkit-C
 ```
