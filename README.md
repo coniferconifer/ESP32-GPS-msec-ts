@@ -3,6 +3,7 @@
 ### msec IoT time stamper by ESP32 using GPS (GY-NEO6MV2 board)
 - for Arduino IDE (FreeRTOS feature is used to demonstrate sensor access as a Task)
 - 1PPS(TIMEPULSE) signal from NEO6M is connected GPIO_NUM_26 to interrupt ESP32 and deciplines ESP32's time stamp for MQTT publication.
+- TinyGPS++ is used to decode NMEA sentenses.
 - MQTT publication code is not included, just print out JSON format data for thingsboard , 
 providing time stamp in msec.
 ```
@@ -29,6 +30,8 @@ GPS 1PPS pulse on time (msec) 72539
 - GPIO_NUM_2 is used to light LED when NMEA provides UTC(in sec) to ESP32.
 - (to do)This is an experimental code to observe the same phenomenon by multiple ESP32 board with sensors.  
 
+- ![Time chart]https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/timechart.png
+- ![1PPS signal wire jumper]https://github.com/coniferconifer/ESP32-GPS-msec-ts/blob/master/NEO6MPPS.jpg
 ### Hardware
 - Hardware: ESP32-devkit-C
 ```
