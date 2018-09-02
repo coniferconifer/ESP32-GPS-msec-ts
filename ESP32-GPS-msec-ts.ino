@@ -34,7 +34,7 @@
 #include <sys/time.h>
 
 TaskHandle_t Task1, Task2, Task3, Task4, Task5;
-#define GPSTIMESET 10 // how frequently synchronized with GPS PPS
+#define GPSTIMESET 1 // how frequently synchronized with GPS PPS
 #include <TinyGPS++.h>
 
 TinyGPSPlus gps;
@@ -88,7 +88,7 @@ void setup() {
 
 long gpsLasttime = 0; long gpsLoop = 0;
 void loop() {
-
+  uint32_t t_millis;
   char c;
   if ( GPS_PulseCount > 0 ) {
     gpsPulseTimeMillis = millis();
@@ -105,8 +105,9 @@ void loop() {
     c = ss.read(); //
     //    Serial.write(c); // monitor for GPS application , ex. ublox u-center
     if (gps.encode(c)) { // some NMEA sentense is parsed
-      if ( (millis() - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
-        if ( millis() - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
+      t_millis= millis();
+      if ( (t_millis - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
+        if ( t_millis - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
           gpsLoop++;
           digitalWrite(GPIO_NUM_4, gpsLoop % 2);
           getGPSInfo();
