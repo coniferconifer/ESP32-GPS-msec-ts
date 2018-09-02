@@ -1,35 +1,35 @@
 /* ESP32-GPS-msec-ts.ino
- * timestamp in msec generator for thingsboard 
+   timestamp in msec generator for thingsboard
    example by coniferconifer
    This code is provided as is , without any warranty.
-   
+
    Apache License v2 LICENSE
-   
+
    The code demonstrates how to make time stamp for thingsboard ,requiring time stamp in msec.
 
    Ex.
    ADC read task is called every 100msec and reads out GPIO_NUM_34.(0-4095 for 3.3V)
    GPS is GY-NEO6MV2 board , without 1PPS output.
-   1PPS pulse (TIMEPULSE pin of NEO6M) is jumper wired from a signal line for on board LED of GY-NEO6MV2 board, 
+   1PPS pulse (TIMEPULSE pin of NEO6M) is jumper wired from a signal line for on board LED of GY-NEO6MV2 board,
    assuming rising edge of 1PPS is anotated by NMEA following 1PPS pulse.
    See the illustration in page27 of Reference[3]
-   
+
    No MQTT publish code is included in this software for simplicity.
    Please write your own MQTT publication code.
    This program works with TinyGPS++ arduino library.
 
     Hardware: ESP32-devkit-C
-     GPIO_NUM_2 ------- LED pull down via 1KOhm (write 1 ... Light On to show GPS decipline) 
-     GPIO_NUM_4 ------- LED pull down via 1KOhm (write 1 ... LIght On to show TinyGPS++ is working) 
+     GPIO_NUM_2 ------- LED pull down via 1KOhm (write 1 ... Light On to show GPS decipline)
+     GPIO_NUM_4 ------- LED pull down via 1KOhm (write 1 ... LIght On to show TinyGPS++ is working)
      GPIO_NUM_34------Voltage monitor connected to CPU Vcc via 4.7KOhm ( ADC port as a sensor)
      GPIO_NUM_26------1PPS(TIMEPULSE) from NEO6M
      GPIO_NUM_17(TX)------NEO6M GPS RX (not used)
-     GPIO_NUM_16(RX)------NEO6M GPS TX 
-   
+     GPIO_NUM_16(RX)------NEO6M GPS TX
+
    [1] https://thingsboard.io/
    [2] http://arduiniana.org/libraries/tinygpsplus/
    [3] https://www.u-blox.com/sites/default/files/products/documents/u-blox6_ReceiverDescrProtSpec_%28GPS.G6-SW-10018%29_Public.pdf
-*/ 
+*/
 #include <time.h>
 #include <sys/time.h>
 
@@ -75,11 +75,11 @@ void setup() {
 
   pinMode(GPIO_NUM_16, INPUT_PULLUP); //GPS NMEA output is connected here
   pinMode(GPIO_NUM_17, OUTPUT);       //to GPS NEO6M , not used now
-  pinMode(GPIO_NUM_34, INPUT); 
+  pinMode(GPIO_NUM_34, INPUT);
   ss.begin(GPS_BAUD);
 
   Serial.println(F("GPS deciplined msec time stamp for thingsboard MQTT server by coniferconifer"));
-  
+
   Serial.print(F("Thanks to TinyGPS++ library v. ")); Serial.print(TinyGPSPlus::libraryVersion());
   Serial.println(F(" by Mikal Hart"));
   // data sampling example
@@ -88,28 +88,30 @@ void setup() {
 
 long gpsLasttime = 0; long gpsLoop = 0;
 void loop() {
-  
+
   char c;
   if ( GPS_PulseCount > 0 ) {
     gpsPulseTimeMillis = millis();
     //If ISR has been serviced at least once
     portENTER_CRITICAL(&mux);
     GPS_PulseCount--;
-    portEXIT_CRITICAL(&mux);    
+    portEXIT_CRITICAL(&mux);
     Serial.print("GPS 1PPS pulse on time (msec) "); Serial.println(gpsPulseTimeMillis);
   }
   if (ss.available() > 0) { //since ss.available() crashes when it is included in a Task,
-                            //so, only GPS task is placed in loop()
+    //so, only GPS task is placed in loop()
     // This sketch displays information every time a new sentence is correctly encoded.
     // , gps.encode(c) is true for about 10 times in a second.
     c = ss.read(); //
     //    Serial.write(c); // monitor for GPS application , ex. ublox u-center
-    if (gps.encode(c)) {
-      if ( millis() - gpsLasttime > 900) {
-        gpsLoop++;
-        digitalWrite(GPIO_NUM_4, gpsLoop % 2);
-        getGPSInfo();
-        gpsLasttime = millis();
+    if (gps.encode(c)) { // some NMEA sentense is parsed
+      if ( (millis() - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
+        if ( millis() - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
+          gpsLoop++;
+          digitalWrite(GPIO_NUM_4, gpsLoop % 2);
+          getGPSInfo();
+          gpsLasttime = millis();
+        }
       }
     }
     //    }
@@ -122,7 +124,7 @@ void loop() {
     }
   }
 }
-
+//TinyGPS++ が時間を確定させるのは1PPSのパルスの後である。NEO6Mの仕様書に書いてある。
 int i = 0;
 void getGPSInfo()
 {
@@ -151,7 +153,7 @@ void getGPSInfo()
       gpsEpochTimeMillis = millis(); //in msec
       gpsOffsetMillis = gpsEpochTimeMillis - gpsPulseTimeMillis;
       struct timeval now = { .tv_sec = t };
-      settimeofday(&now, NULL);
+      settimeofday(&now, NULL); //本システムは使っていないが、とりあえずシステムの日時を設定
       Serial.printf("GPS Epochtime= %d ", gpsEpochTime); Serial.print(" offset="); Serial.print(gpsOffsetMillis);
       Serial.printf(" UTC time: %s", asctime(&tm));
 
@@ -165,7 +167,7 @@ void getGPSInfo()
       payload += ",\"values\":{ "; payload += "\"offset\": "; payload += gpsOffsetMillis;
       payload += "}}";
       Serial.println(payload);
-      // turn on/off LED 
+      // turn on/off LED
       digitalWrite(GPIO_NUM_2, HIGH);
       delay(50);
       digitalWrite(GPIO_NUM_2, LOW);
@@ -191,7 +193,7 @@ void codeForADC(void * parameter)
   Serial.println(F("Voltage check task started."));
   while (1) {
     checkVoltageLevel();
-//    vTaskDelay( ADC_CHECK_INTERVAL / portTICK_RATE_MS );
+    //    vTaskDelay( ADC_CHECK_INTERVAL / portTICK_RATE_MS );
     vTaskDelayUntil(&xLastWakeTime, ADC_CHECK_INTERVAL / portTICK_RATE_MS );
   }
 }
