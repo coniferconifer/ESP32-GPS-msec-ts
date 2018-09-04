@@ -46,10 +46,10 @@ portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED; //http://marchan.e5.valueserver
 #include <time.h>
 #include <sys/time.h>
 
-uint32_t gpsEpochTime = 0; //in sec UNIX epoch time , second is counted up since 00:00:00 Jan 1 1970
-uint32_t gpsEpochTimeMillis = 0; //in msec millis() when NMEA sentence gives UTC
-uint32_t gpsPulseTimeMillis = 0; // millis() when 1PPS from GPS rises
-uint32_t gpsOffsetMillis = 0; // msec between 1PPS pulse (rising edge ) to when NMEA sentence gives UTC
+unsigned long gpsEpochTime = 0; //in sec UNIX epoch time , second is counted up since 00:00:00 Jan 1 1970
+unsigned long gpsEpochTimeMillis = 0; //in msec millis() when NMEA sentence gives UTC
+unsigned long gpsPulseTimeMillis = 0; // millis() when 1PPS from GPS rises
+unsigned long gpsOffsetMillis = 0; // msec between 1PPS pulse (rising edge ) to when NMEA sentence gives UTC
 
 // interrupt service for 1PPS from NEO6M GPS
 void IRAM_ATTR GPSPulseISR()
@@ -66,14 +66,14 @@ HardwareSerial ss(2); // GPIO_NUM_16 for RX ( wired to NEO6M TX) GPIO_NUM_16 for
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  pinMode(GPIO_NUM_26, INPUT); //1PPS pulse conncted to NEO6M by jumer wire
+  pinMode(GPIO_NUM_26, INPUT_PULLUP); //1PPS pulse conncted to NEO6M by jumer wire
   pinMode(GPIO_NUM_4, OUTPUT); //LED
   pinMode(GPIO_NUM_2, OUTPUT); //indicates NMEA UTC is available
   digitalWrite(GPIO_NUM_2, LOW);
 
   attachInterrupt(digitalPinToInterrupt(GPIO_NUM_26), GPSPulseISR, RISING);
 
-  pinMode(GPIO_NUM_16, INPUT_PULLUP); //GPS NMEA output is connected here
+  pinMode(GPIO_NUM_16, INPUT); //GPS NMEA output is connected here
   pinMode(GPIO_NUM_17, OUTPUT);       //to GPS NEO6M , not used now
   pinMode(GPIO_NUM_34, INPUT);
   ss.begin(GPS_BAUD);
@@ -87,16 +87,22 @@ void setup() {
 }
 
 long gpsLasttime = 0; long gpsLoop = 0;
+unsigned long gpsPulseTimeMicros = 0;
+unsigned long gpsPulseTimeMicrosLast = 0;
 void loop() {
   uint32_t t_millis;
   char c;
   if ( GPS_PulseCount > 0 ) {
+    gpsPulseTimeMicros = micros();
     gpsPulseTimeMillis = millis();
     //If ISR has been serviced at least once
     portENTER_CRITICAL(&mux);
     GPS_PulseCount--;
     portEXIT_CRITICAL(&mux);
-    Serial.print("GPS 1PPS pulse on time (msec) "); Serial.println(gpsPulseTimeMillis);
+
+    Serial.print("GPS 1PPS pulse on time (msec) "); Serial.print(gpsPulseTimeMillis);
+    Serial.print(" jitter (usec) "); Serial.println(gpsPulseTimeMicros - gpsPulseTimeMicrosLast - 1000000);
+    gpsPulseTimeMicrosLast = gpsPulseTimeMicros;
   }
   if (ss.available() > 0) { //since ss.available() crashes when it is included in a Task,
     //so, only GPS task is placed in loop()
@@ -105,13 +111,15 @@ void loop() {
     c = ss.read(); //
     //    Serial.write(c); // monitor for GPS application , ex. ublox u-center
     if (gps.encode(c)) { // some NMEA sentense is parsed
-      t_millis= millis();
+      t_millis = millis();
+      if ( t_millis < (0xffffffff - 1000)) { // avoid millis roll over
       if ( (t_millis - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
-        if ( t_millis - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
-          gpsLoop++;
-          digitalWrite(GPIO_NUM_4, gpsLoop % 2);
-          getGPSInfo();
-          gpsLasttime = millis();
+          if ( t_millis - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
+            gpsLoop++;
+            digitalWrite(GPIO_NUM_4, gpsLoop % 2);
+            getGPSInfo();
+            gpsLasttime = millis();
+          }
         }
       }
     }
