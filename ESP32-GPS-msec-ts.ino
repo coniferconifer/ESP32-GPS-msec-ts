@@ -1,6 +1,8 @@
 /* ESP32-GPS-msec-ts.ino
-   timestamp in msec generator for thingsboard
-   example by coniferconifer
+   IoT timestamp in msec generator for thingsboard
+   example by coniferconifer  
+   Sep 13,2018
+   
    This code is provided as is , without any warranty.
 
    Apache License v2 LICENSE
@@ -50,12 +52,17 @@ unsigned long gpsEpochTime = 0; //in sec UNIX epoch time , second is counted up 
 unsigned long gpsEpochTimeMillis = 0; //in msec millis() when NMEA sentence gives UTC
 unsigned long gpsPulseTimeMillis = 0; // millis() when 1PPS from GPS rises
 unsigned long gpsOffsetMillis = 0; // msec between 1PPS pulse (rising edge ) to when NMEA sentence gives UTC
-
+long gpsLasttime = 0; long gpsLoop = 0;
+unsigned long gpsPulseTimeMicros = 0;
+unsigned long gpsPulseTimeMicrosLast = 0;
 // interrupt service for 1PPS from NEO6M GPS
+// https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
 void IRAM_ATTR GPSPulseISR()
 {
   //Serial.println("Interrupt serviced.");
   portENTER_CRITICAL_ISR(&mux);
+  gpsPulseTimeMicros = micros();
+  gpsPulseTimeMillis = millis();
   GPS_PulseCount++;
   portEXIT_CRITICAL_ISR(&mux);
 
@@ -86,15 +93,13 @@ void setup() {
   xTaskCreatePinnedToCore( codeForADC, "ADCTask", 4000, NULL, 1, &Task1, 1); //core 1
 }
 
-long gpsLasttime = 0; long gpsLoop = 0;
-unsigned long gpsPulseTimeMicros = 0;
-unsigned long gpsPulseTimeMicrosLast = 0;
+
 void loop() {
   uint32_t t_millis;
   char c;
   if ( GPS_PulseCount > 0 ) {
-    gpsPulseTimeMicros = micros();
-    gpsPulseTimeMillis = millis();
+//    gpsPulseTimeMicros = micros();
+//    gpsPulseTimeMillis = millis();
     //If ISR has been serviced at least once
     portENTER_CRITICAL(&mux);
     GPS_PulseCount--;
@@ -113,12 +118,15 @@ void loop() {
     if (gps.encode(c)) { // some NMEA sentense is parsed
       t_millis = millis();
       if ( t_millis < (0xffffffff - 1000)) { // avoid millis roll over
-      if ( (t_millis - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
-          if ( t_millis - gpsLasttime > 900) { // but discard other consective NMEA sentenses after PPS
+        if ( (t_millis - gpsPulseTimeMillis) < 500) { //NMEA parsed is immediately done after PPS
+          // Serial.print(t_millis); Serial.print(" " ); Serial.print(gpsLasttime); Serial.print(":"); Serial.println( t_millis -gpsLasttime);
+          if ( t_millis - gpsLasttime > 900) { // but discard other consective NMEA sentenses after first NMEA after PPS
             gpsLoop++;
             digitalWrite(GPIO_NUM_4, gpsLoop % 2);
             getGPSInfo();
             gpsLasttime = millis();
+          } else {
+          //  Serial.println("discard this NMEA");
           }
         }
       }
@@ -132,8 +140,10 @@ void loop() {
       }
     }
   }
+
+
 }
-//TinyGPS++ が時間を確定させるのは1PPSのパルスの後である。NEO6Mの仕様書に書いてある。
+//UTC by TinyGPS++ points to the rising edge of PPS according to NEO6M reference manual
 int i = 0;
 void getGPSInfo()
 {
@@ -162,7 +172,7 @@ void getGPSInfo()
       gpsEpochTimeMillis = millis(); //in msec
       gpsOffsetMillis = gpsEpochTimeMillis - gpsPulseTimeMillis;
       struct timeval now = { .tv_sec = t };
-      settimeofday(&now, NULL); //本システムは使っていないが、とりあえずシステムの日時を設定
+      settimeofday(&now, NULL); //not used in this system
       Serial.printf("GPS Epochtime= %d ", gpsEpochTime); Serial.print(" offset="); Serial.print(gpsOffsetMillis);
       Serial.printf(" UTC time: %s", asctime(&tm));
 
@@ -200,6 +210,7 @@ void codeForADC(void * parameter)
   portTickType xLastWakeTime;
   xLastWakeTime = xTaskGetTickCount();
   Serial.println(F("Voltage check task started."));
+  delay(3000); // do not disturbe loop() gets GPS PPS and fix UTC 
   while (1) {
     checkVoltageLevel();
     //    vTaskDelay( ADC_CHECK_INTERVAL / portTICK_RATE_MS );
